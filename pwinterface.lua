@@ -1,6 +1,15 @@
 -- Just a layer of abstraction between lua and a shell that interacts with pipewire
 local pwinterface = {}
 
+-- Wrapper for io.popen that returns the output of the given command
+local function getOSExecuteResult(command)
+    local fs = io.popen(command)
+    assert(fs, ("getOSExecuteResult given malformed command '%s'"):format(command))
+    local result = fs:read("*all")
+    fs:close()
+    return result
+end
+
 local LINE_CAPTURE = "[^\r\n]+"
 local ID_CAPTURE = "id %d+"
 -- Convert the result of "pw-cli list-objects" into a simple to work with table
@@ -21,13 +30,38 @@ local function parsePipewireListObjectsOutput(output)
     return objects
 end
 
--- Wrapper for io.popen that returns the output of the given command
-local function getOSExecuteResult(command)
-    local fs = io.popen(command)
-    assert(fs, ("getOSExecuteResult given malformed command '%s'"):format(command))
-    local result = fs:read("*all")
-    fs:close()
+local PIPEWIRE_LINK_CAPTURE = "%s+(%d+)%s([^\n]+)%s+(%d+)%s+(%S+)%s+(%d+)%s+([^\n]+)"
+local function parsePipewireLinkOutput(output)
+    local result = {}
+
+    for portID1, port1, linkID, direction, portID2, port2 in output:gmatch(PIPEWIRE_LINK_CAPTURE) do
+        print(portID1, port1, linkID, direction, portID2, port2)
+        table.insert(result, {
+            portName1 = port1,
+            portID1 = portID1,
+            portName2 = port2,
+            portID2 = portID2,
+
+            id = linkID,
+            direction = direction == "|->" and "out" or "in"
+        })
+    end
+
     return result
+end
+
+pwinterface.parsePipewireLinkOutput = parsePipewireLinkOutput
+
+local PIPEWIRE_OBJECT_PROPERTIES_CAPTURE = "([%S]+) = \"([^\n]+)\""
+function pwinterface.getDetailedObjectInformation(objectID)
+    local infoString = getOSExecuteResult(("pw-cli info %d"):format(tonumber(objectID)))
+
+    local infoTable = {id = tostring(objectID)}
+    for prop, val in infoString:gmatch(PIPEWIRE_OBJECT_PROPERTIES_CAPTURE) do
+        infoTable[prop] = val
+    end
+
+    return infoTable
 end
 
 local INPUT_CONNECTION_ID_CAPTURE = "(%d+)%s+|<-"
@@ -73,6 +107,10 @@ function pwinterface.getNodesWithName(nodeName, ignoreWhitelist)
     return pwinterface.listNodesByName(nodeName, ignoreWhitelist)
 end
 
+function pwinterface.getLinks()
+    local linksString = getOSExecuteResult("pw-cli ls Link")
+    return parsePipewireListObjectsOutput(linksString)
+end
 function pwinterface.getLinkByNodeIDs(outputID, inputID)
     local linksString = getOSExecuteResult("pw-cli ls Link")
 
@@ -83,8 +121,29 @@ function pwinterface.getLinkByNodeIDs(outputID, inputID)
         end
     end
 end
+function pwinterface.getLinkObjectsByNodeID(nodeID)
+    local links = pwinterface.getLinks()
+--     local nodeInfo = pwinterface.getDetailedObjectInformation(nodeID)
+    local result = {}
+    for _, link in pairs(links) do
+        if link["link.output.node"] == nodeID or link["link.input.node"] == nodeID then
+            table.insert(result, link)
+        end
+    end
+
+    return result
+end
 
 function pwinterface.connectNodes(output, input)
+    -- May be necessary to prevent crashes
+    for _, link in pairs(pwinterface.getLinkObjectsByNodeID(output)) do
+        local inputObject = pwinterface.getDetailedObjectInformation(link["link.input.node"])
+        if inputObject["node.name"] == input then
+            print "Automatic connection prevented as nodes are already connected"
+            return
+        end
+    end
+
     os.execute(("pw-link '%s' '%s' "):format(output, input))
 end
 -- Specifically for connecting all outputs under a shared name (i.e. all audio sources under 'Firefox') to a single input node
@@ -116,7 +175,13 @@ end
 function pwinterface.destroyNodeByName(nodeName)
     local nodes = pwinterface.getNodesWithName(nodeName, true)
     for _, node in pairs(nodes) do
-        pwinterface.destroyNode(node.id)
+        print("Destroying Node:")
+        print(node["node.name"])
+        if node["node.name"] == nodeName then -- sanity check
+            -- Might need to do this first to prevent issues, not entirely sure, probably a good idea regardless
+            pwinterface.disconnectInputs(nodeName)
+            pwinterface.destroyNode(node.id)
+        end
     end
 end
 

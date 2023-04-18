@@ -1,8 +1,13 @@
 local obs = obslua
 local pwi = require "pwinterface"
 
+local UNLOADING = false
+
 -- [nodeName] = true/nil
 local MANAGED_NODE_NAMES = {}
+
+-- [data] = nodeName/nil
+local AUTORECONNECT_NODES = {}
 
 local CENTRAL_VIRTUAL_MONITOR = "OBS Pipewire Audio Capture Monitor"
 local _CENTRAL_VIRTUAL_MONITOR_STRING = [[
@@ -27,8 +32,29 @@ Note that "OBS Pipewire Audio Capture Monitor" must be added as a global audio d
 ]]
 end
 
+local AUTO_RECONNECT_TIME_MS = 500
+function autoReconnectCallback()
+    if UNLOADING then return end
+    for data, node_name in pairs(AUTORECONNECT_NODES) do
+        if MANAGED_NODE_NAMES[node_name] then
+            print "AUTO CONNECTING NODES"
+            pwi.connectAllNamed(node_name, CENTRAL_VIRTUAL_MONITOR)
+        end
+    end
+end
+
+obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
+
 function script_unload()
-    pwi.destroyNodeByName(CENTRAL_VIRTUAL_MONITOR)
+    UNLOADING = true
+    -- For some reason when autoreconnecting is active, pipewire crashes due to some unresolved reference; cannot be bothered to diagnose the issue at the moment.
+    -- If you often close OBS and then open it again in less than 5 seconds, more power to you.
+    -- Yes this is a hack, this entire script is a hack.
+    if next(AUTORECONNECT_NODES) ~= nil then
+        os.execute(("(sleep 5; pw-cli destroy '%s') &"):format(CENTRAL_VIRTUAL_MONITOR))
+    else
+        pwi.destroyNodeByName(CENTRAL_VIRTUAL_MONITOR)
+    end
 end
 
 local pipewireAudioCaptureSource = {
@@ -45,8 +71,13 @@ end
 function pipewireAudioCaptureSource.create(settings, source)
     local data = {
         source_name = obs.obs_source_get_name(source),
-        managed_node = obs.obs_data_get_string(settings, "Audio Source")
+        managed_node = obs.obs_data_get_string(settings, "Audio Source"),
+        auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
     }
+
+    if data.managed_node and data.auto_reconnect then
+        AUTORECONNECT_NODES[data] = data.managed_node
+    end
 
     return data
 end
@@ -65,6 +96,7 @@ function pipewireAudioCaptureSource.activate(data)
     local audioSource = obs.obs_data_get_string(settings, "Audio Source")
     if audioSource ~= "None" then
         pwi.connectAllNamed(audioSource, CENTRAL_VIRTUAL_MONITOR)
+        MANAGED_NODE_NAMES[data.managed_node] = true
     end
     obs.obs_data_release(settings)
     obs.obs_source_release(source)
@@ -72,7 +104,7 @@ end
 
 function pipewireAudioCaptureSource.get_properties(data)
     local properties = obs.obs_properties_create()
-    local audioSourceProp = obs.obs_properties_add_list(properties, "Audio Source", "Audio to capture", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
+    local audioSourceProp = obs.obs_properties_add_list(properties, "Audio Source", "Application Audio to Capture", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
 
     local audioSources = pwi.listNodesByName()
     obs.obs_property_list_insert_string(audioSourceProp, 0, "None", "None")
@@ -99,6 +131,18 @@ function pipewireAudioCaptureSource.get_properties(data)
         if newAudioSource ~= "None" then
             MANAGED_NODE_NAMES[newAudioSource] = true
             pwi.connectAllNamed(newAudioSource, CENTRAL_VIRTUAL_MONITOR)
+            AUTORECONNECT_NODES[data] = data.auto_reconnect and data.managed_node or nil
+        else
+            AUTORECONNECT_NODES[data] = nil
+        end
+    end)
+
+    local autoreconnectProp = obs.obs_properties_add_bool(properties, "autoreconnect", "Automatically Connect Audio Sources with Same Name")
+
+    obs.obs_property_set_modified_callback(autoreconnectProp, function(props, prop, settings)
+        data.auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
+        if data.managed_node ~= "None" then
+            AUTORECONNECT_NODES[data] = data.auto_reconnect and data.managed_node or nil
         end
     end)
 
