@@ -10,15 +10,18 @@ local MANAGED_NODE_NAMES = {}
 local AUTORECONNECT_NODES = {}
 
 local CENTRAL_VIRTUAL_MONITOR = "OBS Pipewire Audio Capture Monitor"
-local _CENTRAL_VIRTUAL_MONITOR_STRING = [[
+local CENTRAL_VIRTUAL_MONITOR_PRIORITY = 700 + 150 * #pwi.getNodesWithName(CENTRAL_VIRTUAL_MONITOR, true) -- This is pretty arbitrary and often doesn't help in my experience?
+local _CENTRAL_VIRTUAL_MONITOR_STRING = ([[
 {
     factory.name     = support.null-audio-sink
-    node.name        = "OBS Pipewire Audio Capture Monitor"
+    node.name        = "%s"
     media.class      = Audio/Sink
     object.linger    = true
     audio.position   = [ FL FR ]
+    priority.session = %d
+    priority.driver  = %d
 }
-]]
+]]):format(CENTRAL_VIRTUAL_MONITOR, CENTRAL_VIRTUAL_MONITOR_PRIORITY, CENTRAL_VIRTUAL_MONITOR_PRIORITY)
 pwi.createNode(_CENTRAL_VIRTUAL_MONITOR_STRING)
 
 function script_description()
