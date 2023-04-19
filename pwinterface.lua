@@ -67,9 +67,7 @@ end
 local INPUT_CONNECTION_ID_CAPTURE = "(%d+)%s+|<-"
 function pwinterface.getNodeInputConnectionIDs(nodeName)
     local cmd = ("pw-link -l -I any '%s'"):format(nodeName)
-    local outputGrab = io.popen(cmd)
-    local output = outputGrab:read("*all")
-    outputGrab:close()
+    local output = getOSExecuteResult(cmd)
 
     local result = {}
 
@@ -107,6 +105,10 @@ function pwinterface.getNodesWithName(nodeName, ignoreWhitelist)
     return pwinterface.listNodesByName(nodeName, ignoreWhitelist)
 end
 
+function pwinterface.doesNodeWithNameExist(nodeName)
+    return getOSExecuteResult(("pw-cli info '%s'"):format(nodeName)) ~= ""
+end
+
 function pwinterface.getLinks()
     local linksString = getOSExecuteResult("pw-cli ls Link")
     return parsePipewireListObjectsOutput(linksString)
@@ -136,13 +138,13 @@ end
 
 function pwinterface.connectNodes(output, input)
     -- May be necessary to prevent crashes
-    for _, link in pairs(pwinterface.getLinkObjectsByNodeID(output)) do
-        local inputObject = pwinterface.getDetailedObjectInformation(link["link.input.node"])
-        if inputObject["node.name"] == input then
-            print "Automatic connection prevented as nodes are already connected"
-            return
-        end
-    end
+--     for _, link in pairs(pwinterface.getLinkObjectsByNodeID(output)) do
+--         local inputObject = pwinterface.getDetailedObjectInformation(link["link.input.node"])
+--         if inputObject["node.name"] == input then
+--             print "Automatic connection prevented as nodes are already connected"
+--             return
+--         end
+--     end
 
     os.execute(("pw-link '%s' '%s' "):format(output, input))
 end
