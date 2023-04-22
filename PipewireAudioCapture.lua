@@ -22,7 +22,7 @@ local _CENTRAL_VIRTUAL_MONITOR_STRING = ([[
     priority.driver  = %d
 }
 ]]):format(CENTRAL_VIRTUAL_MONITOR, CENTRAL_VIRTUAL_MONITOR_PRIORITY, CENTRAL_VIRTUAL_MONITOR_PRIORITY)
-pwi.createNode(_CENTRAL_VIRTUAL_MONITOR_STRING)
+pwi.recreateNode(CENTRAL_VIRTUAL_MONITOR, _CENTRAL_VIRTUAL_MONITOR_STRING)
 
 function script_description()
     return [[
@@ -50,14 +50,11 @@ obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
 
 function script_unload()
     UNLOADING = true
-    -- For some reason when autoreconnecting is active, pipewire crashes due to some unresolved reference; cannot be bothered to diagnose the issue at the moment.
+    -- For some reason when autoreconnecting is active, pipewire crashes due to some unresolved reference
+    -- if the node is destroyed; cannot be bothered to diagnose the issue at the moment.
     -- If you often close OBS and then open it again in less than 5 seconds, more power to you.
     -- Yes this is a hack, this entire script is a hack.
-    if next(AUTORECONNECT_NODES) ~= nil then
-        os.execute(("(sleep 5; pw-cli destroy '%s') &"):format(CENTRAL_VIRTUAL_MONITOR))
-    else
-        pwi.destroyNodeByName(CENTRAL_VIRTUAL_MONITOR)
-    end
+    os.execute(("(sleep 5; pgrep -x obs >/dev/null && echo 'obs is still running' || pw-cli destroy '%s') &"):format(CENTRAL_VIRTUAL_MONITOR))
 end
 
 local pipewireAudioCaptureSource = {
@@ -80,6 +77,10 @@ function pipewireAudioCaptureSource.create(settings, source)
 
     if data.managed_node and data.auto_reconnect then
         AUTORECONNECT_NODES[data] = data.managed_node
+    end
+    if data.managed_node and obs.obs_source_active(source) then
+        MANAGED_NODE_NAMES[data.managed_node] = true
+        pwi.connectAllNamed(data.managed_node, CENTRAL_VIRTUAL_MONITOR)
     end
 
     return data

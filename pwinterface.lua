@@ -171,6 +171,12 @@ end
 function pwinterface.createNode(argString)
     os.execute(("pw-cli create-node adapter '%s'"):format(argString))
 end
+-- Creates the node if it node with name `nodeName` doesn't exist, else does nothing
+function pwinterface.recreateNode(nodeName, argString)
+    if not pwinterface.doesNodeWithNameExist(nodeName) then
+        pwinterface.createNode(argString)
+    end
+end
 function pwinterface.destroyNode(nodeID)
     os.execute(("pw-cli destroy %s"):format(nodeID))
 end
