@@ -26,12 +26,11 @@ pwi.recreateNode(CENTRAL_VIRTUAL_MONITOR, _CENTRAL_VIRTUAL_MONITOR_STRING)
 
 function script_description()
     return [[
-A super scuffed script that attempts to make capturing specific application audio easier
-By all practicality just a bunch of automated pw-cli calls, I am unfortunately not well-versed with C++ at the moment
-Note that currently all output nodes with a shared name will be captured (i.e. all audio outputs with the name 'Firefox')
-This is intentional since my personal use-case is capturing game audio, which will often have multiple outputs created for some reason
-I may add it as an option at some point but right now cannot be bothered
-Note that "OBS Pipewire Audio Capture Monitor" must be added as a global audio device under the audio settings for sound to be recorded
+<center><h2>Pipewire Audio Capture</h2></center>
+<p>A super scuffed script that attempts to make capturing specific application audio easier.</p>
+<p>A new source called "Pipewire Audio Capture" should be available as a source if everything is working as intended.</p>
+<p><a href="https://github.com/PhantomShift/PipewireAudioCaptureScript">Source code</a></p>
+<p><strong>Note that "OBS Pipewire Audio Capture Monitor" must be added as a global audio device under the audio settings for sound to be recorded</strong></p>
 ]]
 end
 
@@ -141,7 +140,10 @@ function pipewireAudioCaptureSource.get_properties(data)
         end
     end)
 
-    local autoreconnectProp = obs.obs_properties_add_bool(properties, "autoreconnect", "Automatically Connect Audio Sources with Same Name")
+    local autoreconnectProp = obs.obs_properties_add_bool(properties, "autoreconnect", "Automatically Connect New Sources with Same Name")
+    obs.obs_property_set_long_description(autoreconnectProp, [[When a new audio source with the same name is created
+automatically connect the new node to the capture.
+Useful for when re-opening applications or in browsers.]])
 
     obs.obs_property_set_modified_callback(autoreconnectProp, function(props, prop, settings)
         data.auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
