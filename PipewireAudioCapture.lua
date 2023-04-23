@@ -1,6 +1,15 @@
 local obs = obslua
 local pwi = require "pwinterface"
 
+local _SCRIPT_DEBUG_MODE = false
+if not _SCRIPT_DEBUG_MODE then
+    print("Pipewire Audio Capture script debugging is off.")
+    local print = _G.print
+    _G.print = function(...)
+        return nil
+    end
+end
+
 local UNLOADING = false
 
 -- [nodeName] = true/nil
