@@ -11,6 +11,9 @@ if not _SCRIPT_DEBUG_MODE then
 end
 
 local UNLOADING = false
+local AUTO_RECONNECT_TIME_MS = 500
+local DEFAULT_AUTO_RECONNECT_TIME_MS = 500
+local _SCRIPT_SETTINGS
 
 -- [nodeName] = true/nil
 local MANAGED_NODE_NAMES = {}
@@ -33,6 +36,18 @@ local _CENTRAL_VIRTUAL_MONITOR_STRING = ([[
 ]]):format(CENTRAL_VIRTUAL_MONITOR, CENTRAL_VIRTUAL_MONITOR_PRIORITY, CENTRAL_VIRTUAL_MONITOR_PRIORITY)
 pwi.recreateNode(CENTRAL_VIRTUAL_MONITOR, _CENTRAL_VIRTUAL_MONITOR_STRING)
 
+function autoReconnectCallback()
+    if UNLOADING then return end
+    print(("%d ms"):format(AUTO_RECONNECT_TIME_MS))
+    for data, node_name in pairs(AUTORECONNECT_NODES) do
+        if MANAGED_NODE_NAMES[node_name] then
+            print "AUTO CONNECTING NODES"
+            pwi.connectAllNamed(node_name, CENTRAL_VIRTUAL_MONITOR)
+        end
+    end
+end
+obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
+
 function script_description()
     return [[
 <center><h2>Pipewire Audio Capture</h2></center>
@@ -43,18 +58,32 @@ function script_description()
 ]]
 end
 
-local AUTO_RECONNECT_TIME_MS = 500
-function autoReconnectCallback()
-    if UNLOADING then return end
-    for data, node_name in pairs(AUTORECONNECT_NODES) do
-        if MANAGED_NODE_NAMES[node_name] then
-            print "AUTO CONNECTING NODES"
-            pwi.connectAllNamed(node_name, CENTRAL_VIRTUAL_MONITOR)
-        end
-    end
+function script_properties()
+    local properties = obs.obs_properties_create()
+
+    local reconnectTime = obs.obs_properties_add_int_slider(properties, "reconnectTime", "Auto Reconnection Time (ms)", 50, 2000, 1)
+    obs.obs_property_set_long_description(reconnectTime, "Time in milliseconds to poll for new nodes for sources where auto reconnect is active. Note that setting this too low may cause performance issues.")
+    obs.obs_property_set_modified_callback(reconnectTime, function(_, _, settings)
+        AUTO_RECONNECT_TIME_MS = obs.obs_data_get_int(settings, "reconnectTime")
+        obs.timer_remove(autoReconnectCallback)
+        obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
+    end)
+    -- Stop-gap measure until timer_add works properly on script reload
+    local forceRestartTimer = obs.obs_properties_add_button(properties, "forceRestartTimer", "Restart Timer", function()
+        AUTO_RECONNECT_TIME_MS = obs.obs_data_get_int(_SCRIPT_SETTINGS, "reconnectTime")
+        obs.timer_remove(autoReconnectCallback)
+        obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
+    end)
+    obs.obs_property_set_long_description(forceRestartTimer, "A stop-gap measure until timer_add works properly on script reload. Must be pressed to re-enable auto reconnecting when reloading script, otherwise OBS must be closed and opened again.")
+
+    return properties
 end
 
-obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
+function script_load(settings)
+    obs.timer_remove(autoReconnectCallback)
+    obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
+    _SCRIPT_SETTINGS = settings
+end
 
 function script_unload()
     UNLOADING = true
