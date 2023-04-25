@@ -25,5 +25,9 @@ Node names to connect. Currently filters out any pipewire nodes that are not of 
  - `Audio/Source`
 
  Currently this whitelist can be edited by editing `pwinterface.lua`, though I will likely decouple this hard-coded whitelist from the script in the future.
- ### `Automatically Connect New Sources with Same Name`
+
+### `Volume (%)`
+Volume of the source's capture.
+
+### `Automatically Connect New Sources with Same Name`
 When a new audio source with the same name is created automatically connect the new node to the capture. Useful for when re-opening applications or in browsers.
