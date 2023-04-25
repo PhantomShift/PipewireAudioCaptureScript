@@ -47,7 +47,10 @@ local _CENTRAL_VIRTUAL_MONITOR_STRING = (BASE_MONITOR_STRING):format(
     CENTRAL_VIRTUAL_MONITOR_PRIORITY,
     CENTRAL_VIRTUAL_MONITOR_PRIORITY
 )
-pwi.recreateNode(CENTRAL_VIRTUAL_MONITOR, _CENTRAL_VIRTUAL_MONITOR_STRING)
+-- pwi.recreateNode(CENTRAL_VIRTUAL_MONITOR, _CENTRAL_VIRTUAL_MONITOR_STRING)
+if not pwi.doesNodeWithNameExist(CENTRAL_VIRTUAL_MONITOR) then
+    pwi.createNode(_CENTRAL_VIRTUAL_MONITOR_STRING)
+end
 
 local function createSubMonitorNode(nodeName)
     return pwi.createAndGetUniqueNode(BASE_MONITOR_STRING:format(
@@ -116,15 +119,23 @@ function script_properties()
     return properties
 end
 
+local function shutdownCallback(event, _)
+    print(event)
+    if event == obs.OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN then
+        pwi.destroyNode(CENTRAL_VIRTUAL_MONITOR)
+    end
+end
+
 function script_load(settings)
     obs.timer_remove(autoReconnectCallback)
     obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
     _SCRIPT_SETTINGS = settings
+    obs.obs_frontend_add_event_callback(shutdownCallback)
+    print "Loaded successfully"
 end
 
 function script_unload()
     UNLOADING = true
-    pwi.destroyNode(CENTRAL_VIRTUAL_MONITOR)
 end
 
 local pipewireAudioCaptureSource = {
