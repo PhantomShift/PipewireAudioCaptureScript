@@ -22,7 +22,7 @@ local function parsePipewireListObjectsOutput(output)
             focusedObject = {id = objectId:match("%d+")}
             table.insert(objects, focusedObject)
         else
-            local prop, value = line:match("([%a%p]+)%s=%s\"(.+)\"")
+            local prop, value = line:match("([%a%p]+)%s=%s\"(.-)\"")
             focusedObject[prop] = value
         end
     end
@@ -54,7 +54,7 @@ pwinterface.parsePipewireLinkOutput = parsePipewireLinkOutput
 
 local PIPEWIRE_OBJECT_PROPERTIES_CAPTURE = "([%S]+) = \"([^\n]+)\""
 function pwinterface.getDetailedObjectInformation(objectID)
-    local infoString = getOSExecuteResult(("pw-cli info %d"):format(tonumber(objectID)))
+    local infoString = getOSExecuteResult(("pw-cli info %s"):format(tostring(objectID)))
 
     local infoTable = {id = tostring(objectID)}
     for prop, val in infoString:gmatch(PIPEWIRE_OBJECT_PROPERTIES_CAPTURE) do
@@ -177,6 +177,23 @@ function pwinterface.recreateNode(nodeName, argString)
         pwinterface.createNode(argString)
     end
 end
+-- Creates the node and returns its `object.id` and `node.name`
+function pwinterface.createAndGetUniqueNode(argString)
+    local originalName = argString:match("node.name%s+=%s+\"(.-)\"")
+    local createdName = originalName
+    local count = 0
+    while pwinterface.doesNodeWithNameExist(createdName) do
+        createdName = originalName .. (" %d"):format(count)
+        count = count + 1
+    end
+    argString:gsub(originalName, createdName)
+    pwinterface.createNode(argString)
+    repeat
+        print "lol"
+    until pwinterface.doesNodeWithNameExist(createdName)
+    -- return pwinterface.getNodesWithName(createdName, true)[1].id, createdName
+    return pwinterface.getDetailedObjectInformation(createdName)["object.id"], createdName
+end
 function pwinterface.destroyNode(nodeID)
     os.execute(("pw-cli destroy %s"):format(nodeID))
 end
@@ -191,6 +208,11 @@ function pwinterface.destroyNodeByName(nodeName)
             pwinterface.destroyNode(node.id)
         end
     end
+end
+
+-- Commands
+function pwinterface.setMonitorVolume(nodeID, volume)
+    os.execute(("pw-cli set-param %s Props '{monitorVolumes: [%f, %f]}'"):format(tostring(nodeID), volume, volume))
 end
 
 return pwinterface
