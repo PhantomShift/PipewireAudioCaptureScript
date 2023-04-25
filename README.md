@@ -1,3 +1,6 @@
+# A Proper Plugin Exists
+I discovered after doing a little bit of browsing on the OBS forums that a [proper plugin](https://github.com/dimtpap/obs-pipewire-audio-capture) for pipewire audio capture exists (that is [in the process of getting merged into the overall OBS project](https://github.com/obsproject/obs-studio/pull/6207)), which handles not only application audio capture but input and output devices as well. This script will continue to exist as my own learning experience but do note that a proper solution exists.
+
 # Pipewire Audio Capture Script
 
 A super scuffed script that attempts to make capturing specific application audio easier. By all practicality just a bunch of automated pw-cli calls, I am unfortunately not well-versed with C++ at the moment and do not have time (woohoo finals season) to work on a full-blown plugin. Note that currently all output nodes with a shared name will be captured (i.e. all audio outputs with the name 'Firefox'). This is intentional since my personal use-case is capturing game audio, which will often have multiple outputs created for some reason. I may add it as an option at some point but right now cannot be bothered
