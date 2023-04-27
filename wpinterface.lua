@@ -38,6 +38,10 @@ function wpinterface.listNodes(nameFilter, classFilter)
     return parseWireplumberObjectOutput(getOSExecuteResult(cmd))
 end
 
+function wpinterface.doesNodeWithNameExist(name)
+    return (#wpinterface.listNodes(name)) > 0
+end
+
 function wpinterface.createMonitor(name, mediaClass)
     assert(name and mediaClass, "Both args required for wpinterface.createMonitor")
     local cmd = ("wpexec %s/createMonitor.lua name=\"%s\" mediaClass=\"%s\""):format(wpScriptDir, name, mediaClass)

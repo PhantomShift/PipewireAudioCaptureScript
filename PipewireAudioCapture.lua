@@ -32,7 +32,9 @@ end
 local CENTRAL_VIRTUAL_MONITOR = "OBS Pipewire Audio Capture Monitor"
 local CENTRAL_VIRTUAL_MONITOR_MEDIA_CLASS = "Audio/Sink" -- Cannot be virtual as it will not be detected by OBS
 
-wpi.createMonitor(CENTRAL_VIRTUAL_MONITOR, CENTRAL_VIRTUAL_MONITOR_MEDIA_CLASS)
+if not wpi.doesNodeWithNameExist(CENTRAL_VIRTUAL_MONITOR) then
+    wpi.createMonitor(CENTRAL_VIRTUAL_MONITOR, CENTRAL_VIRTUAL_MONITOR_MEDIA_CLASS)
+end
 
 local function createSubMonitorNode(nodeName)
     return wpi.createMonitor("OBS Source " .. nodeName, "Audio/Sink/Virtual")
