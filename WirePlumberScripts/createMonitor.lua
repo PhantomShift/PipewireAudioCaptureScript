@@ -11,6 +11,7 @@ node = Node("adapter", {
     ["audio.position"]  = "[ FL FR ]",
 
     ["monitor.channel-volumes"]         = true,
+-- `session.suspend-timeout-seconds` is set to 0 to prevent wireplumber from attempting to suspend destroyed nodes
     ["session.suspend-timeout-seconds"] = 0
 })
 

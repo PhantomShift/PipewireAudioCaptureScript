@@ -14,8 +14,6 @@ if not _SCRIPT_DEBUG_MODE then
     end
 end
 
-local _SCRIPT_SETTINGS
-
 -- [nodeName] = true/nil
 local MANAGED_NODE_NAMES = {}
 
@@ -31,46 +29,11 @@ local function startAutoConnecting(outputNode, inputNode)
     return pid
 end
 
--- `session.suspend-timeout-seconds` is set to 0 to prevent wireplumber from attempting to suspend destroyed nodes
-local BASE_MONITOR_STRING = [[
-{
-    factory.name     = support.null-audio-sink
-    node.name        = "%s"
-    node.virtual     = true
-    media.class      = %s
-    object.linger    = true
-    audio.position   = [ FL FR ]
-    priority.session = %d
-    priority.driver  = %d
-
-    monitor.channel-volumes         = true
-    session.suspend-timeout-seconds = 0
-}
-]]
-
 local CENTRAL_VIRTUAL_MONITOR = "OBS Pipewire Audio Capture Monitor"
-local CENTRAL_VIRTUAL_MONITOR_PRIORITY = 700 + 150 * #pwi.getNodesWithName(CENTRAL_VIRTUAL_MONITOR, true) -- This is pretty arbitrary and often doesn't help in my experience?
 local CENTRAL_VIRTUAL_MONITOR_MEDIA_CLASS = "Audio/Sink" -- Cannot be virtual as it will not be detected by OBS
-local _CENTRAL_VIRTUAL_MONITOR_STRING = (BASE_MONITOR_STRING):format(
-    CENTRAL_VIRTUAL_MONITOR,
-    CENTRAL_VIRTUAL_MONITOR_MEDIA_CLASS,
-    CENTRAL_VIRTUAL_MONITOR_PRIORITY,
-    CENTRAL_VIRTUAL_MONITOR_PRIORITY
-)
--- pwi.recreateNode(CENTRAL_VIRTUAL_MONITOR, _CENTRAL_VIRTUAL_MONITOR_STRING)
--- if not pwi.doesNodeWithNameExist(CENTRAL_VIRTUAL_MONITOR) then
---     pwi.createNode(_CENTRAL_VIRTUAL_MONITOR_STRING)
--- end
+
 wpi.createMonitor(CENTRAL_VIRTUAL_MONITOR, CENTRAL_VIRTUAL_MONITOR_MEDIA_CLASS)
 
--- local function createSubMonitorNode(nodeName)
---     return pwi.createAndGetUniqueNode(BASE_MONITOR_STRING:format(
---         "OBS Source " .. nodeName,
---         "Audio/Sink/Virtual",
---         500,
---         500
---     ))
--- end
 local function createSubMonitorNode(nodeName)
     return wpi.createMonitor("OBS Source " .. nodeName, "Audio/Sink/Virtual")
 end
@@ -114,7 +77,6 @@ local function shutdownCallback(event, _)
 end
 
 function script_load(settings)
-    _SCRIPT_SETTINGS = settings
     obs.obs_frontend_add_event_callback(shutdownCallback)
     print "Loaded successfully"
 end
