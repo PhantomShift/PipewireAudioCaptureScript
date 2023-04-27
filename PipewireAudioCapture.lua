@@ -1,5 +1,6 @@
 local obs = obslua
 local pwi = require "pwinterface"
+local processManager = require "processManager"
 
 local _SCRIPT_DEBUG_MODE = false
 if not _SCRIPT_DEBUG_MODE then
@@ -10,16 +11,22 @@ if not _SCRIPT_DEBUG_MODE then
     end
 end
 
-local UNLOADING = false
-local AUTO_RECONNECT_TIME_MS = 500
-local DEFAULT_AUTO_RECONNECT_TIME_MS = 500
 local _SCRIPT_SETTINGS
 
 -- [nodeName] = true/nil
 local MANAGED_NODE_NAMES = {}
 
--- [data] = nodeName/nil
-local AUTORECONNECT_NODES = {}
+-- [data] = pid/nil
+local AUTORECONNECT_PROCESSES = {}
+local function startAutoConnecting(outputNode, inputNode)
+    local pid = processManager:spawn(("wpexec %s/WirePlumberScripts/autoconnect.lua inputNode=\"%s\" outputNode=\"%s\""):format(
+        script_path(),
+        inputNode,
+        outputNode
+    ))
+
+    return pid
+end
 
 -- `session.suspend-timeout-seconds` is set to 0 to prevent wireplumber from attempting to suspend destroyed nodes
 local BASE_MONITOR_STRING = [[
@@ -61,18 +68,6 @@ local function createSubMonitorNode(nodeName)
     ))
 end
 
-function autoReconnectCallback()
-    if UNLOADING then return end
-    -- print(("%d ms"):format(AUTO_RECONNECT_TIME_MS))
-    for data, node_name in pairs(AUTORECONNECT_NODES) do
-        if MANAGED_NODE_NAMES[node_name] then
-            print "AUTO CONNECTING NODES"
-            pwi.connectAllNamed(node_name, data.capture_node)
-        end
-    end
-end
-obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
-
 local VolumeManager = {volumes = {}}
 function VolumeManager:update()
     for id, vol in pairs(self.volumes) do
@@ -101,21 +96,6 @@ end
 function script_properties()
     local properties = obs.obs_properties_create()
 
-    local reconnectTime = obs.obs_properties_add_int_slider(properties, "reconnectTime", "Auto Reconnection Time (ms)", 50, 2000, 1)
-    obs.obs_property_set_long_description(reconnectTime, "Time in milliseconds to poll for new nodes for sources where auto reconnect is active. Note that setting this too low may cause performance issues.")
-    obs.obs_property_set_modified_callback(reconnectTime, function(_, _, settings)
-        AUTO_RECONNECT_TIME_MS = obs.obs_data_get_int(settings, "reconnectTime")
-        obs.timer_remove(autoReconnectCallback)
-        obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
-    end)
-    -- Stop-gap measure until timer_add works properly on script reload
-    local forceRestartTimer = obs.obs_properties_add_button(properties, "forceRestartTimer", "Restart Timer", function()
-        AUTO_RECONNECT_TIME_MS = obs.obs_data_get_int(_SCRIPT_SETTINGS, "reconnectTime")
-        obs.timer_remove(autoReconnectCallback)
-        obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
-    end)
-    obs.obs_property_set_long_description(forceRestartTimer, "A stop-gap measure until timer_add works properly on script reload. Must be pressed to re-enable auto reconnecting when reloading script, otherwise OBS must be closed and opened again.")
-
     return properties
 end
 
@@ -127,15 +107,15 @@ local function shutdownCallback(event, _)
 end
 
 function script_load(settings)
-    obs.timer_remove(autoReconnectCallback)
-    obs.timer_add(autoReconnectCallback, AUTO_RECONNECT_TIME_MS)
     _SCRIPT_SETTINGS = settings
     obs.obs_frontend_add_event_callback(shutdownCallback)
     print "Loaded successfully"
 end
 
 function script_unload()
-    UNLOADING = true
+    for p in pairs(processManager) do
+        processManager:kill(p)
+    end
 end
 
 local pipewireAudioCaptureSource = {
@@ -156,9 +136,10 @@ function pipewireAudioCaptureSource.create(settings, source)
         auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
     }
     data.capture_node = createSubMonitorNode(data.source_name)
+    data.capture_name = "OBS Source " .. data.source_name
     VolumeManager:set(data.capture_node, obs.obs_data_get_int(settings, "volume") / 100)
     if data.managed_node and data.auto_reconnect then
-        AUTORECONNECT_NODES[data] = data.managed_node
+        AUTORECONNECT_PROCESSES[data] = startAutoConnecting(data.managed_node, data.capture_name)
     end
     if obs.obs_source_active(source) then
         pwi.connectNodes(data.capture_node, CENTRAL_VIRTUAL_MONITOR)
@@ -172,7 +153,8 @@ function pipewireAudioCaptureSource.create(settings, source)
 end
 
 function pipewireAudioCaptureSource.destroy(data)
-    AUTORECONNECT_NODES[data] = nil
+    processManager:kill(AUTORECONNECT_PROCESSES[data])
+    AUTORECONNECT_PROCESSES[data] = nil
     MANAGED_NODE_NAMES[data.managed_node] = nil
     pwi.destroyNode(data.capture_node)
 end
@@ -212,6 +194,10 @@ function pipewireAudioCaptureSource.get_properties(data)
         print(data.managed_node)
         pwi.disconnectAllNamed(data.managed_node, data.capture_node)
         MANAGED_NODE_NAMES[data.managed_node] = nil
+        if AUTORECONNECT_PROCESSES[data] then
+            processManager:kill(AUTORECONNECT_PROCESSES[data])
+            AUTORECONNECT_PROCESSES[data] = nil
+        end
 
         print("New audio source:")
         print(newAudioSource)
@@ -219,14 +205,20 @@ function pipewireAudioCaptureSource.get_properties(data)
         if newAudioSource ~= "None" then
             if not data.capture_node then
                 data.capture_node = createSubMonitorNode(data.source_name)
+                data.capture_name = "OBS Source " .. data.source_name
                 pwi.connectNodes(data.capture_node, CENTRAL_VIRTUAL_MONITOR)
             end
             local captureID = data.capture_node
 
             MANAGED_NODE_NAMES[data.managed_node] = true
             pwi.connectAllNamed(data.managed_node, captureID)
+
+            if data.auto_reconnect then
+                AUTORECONNECT_PROCESSES[data] = startAutoConnecting(data.managed_node, data.capture_name)
+            end
         else
-            AUTORECONNECT_NODES[data] = nil
+            processManager:kill(AUTORECONNECT_PROCESSES[data])
+            AUTORECONNECT_PROCESSES[data] = nil
         end
     end)
 
@@ -244,7 +236,12 @@ Useful for when re-opening applications or in browsers.]])
     obs.obs_property_set_modified_callback(autoreconnectProp, function(props, prop, settings)
         data.auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
         if data.managed_node ~= "None" then
-            AUTORECONNECT_NODES[data] = data.auto_reconnect and data.managed_node or nil
+            if data.auto_reconnect and data.managed_node then
+                AUTORECONNECT_PROCESSES[data] = startAutoConnecting(data.managed_node, data.capture_name)
+            else
+                processManager:kill(AUTORECONNECT_PROCESSES[data])
+                AUTORECONNECT_PROCESSES[data] = nil
+            end
         end
     end)
 
