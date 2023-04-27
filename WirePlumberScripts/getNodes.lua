@@ -44,3 +44,8 @@ nodeManager:connect("installed", function(self)
 end)
 
 nodeManager:activate()
+
+Core.timeout_add(50, function()
+    Log.warning("Error occurred in trying to get nodes")
+    Core.quit()
+end)

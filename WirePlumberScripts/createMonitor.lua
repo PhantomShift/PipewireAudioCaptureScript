@@ -23,3 +23,8 @@ node:connect("state-changed", function(self, oldState, newState)
 end)
 
 node:activate(1)
+
+Core.timeout_add(50, function()
+    Log.warning("Error occurred in trying to create virtual monitor")
+    Core.quit()
+end)
