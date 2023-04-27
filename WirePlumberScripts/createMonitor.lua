@@ -15,9 +15,11 @@ node = Node("adapter", {
     ["session.suspend-timeout-seconds"] = 0
 })
 
-node:activate(1)
-
-Core.timeout_add(10, function()
-    print(node.properties["object.id"])
-    Core.quit()
+node:connect("state-changed", function(self, oldState, newState)
+    if oldState == "creating" then
+        print(node.properties["object.id"])
+        Core.idle_add(function() Core.quit() end)
+    end
 end)
+
+node:activate(1)

@@ -22,7 +22,7 @@ if arg["filterClass"] then
     classConstraint = Constraint { "media.class", "in-list", table.unpack(splitString(arg["filterClass"])) }
 end
 
-AppManager = ObjectManager {
+nodeManager = ObjectManager {
     Interest {
         type = "node",
         nameConstraint,
@@ -30,11 +30,8 @@ AppManager = ObjectManager {
     },
 }
 
-AppManager:activate()
-
--- Minimum timeout seems to be about 3 milliseconds, but set to 10 just to make sure
-Core.timeout_add(10, function()
-    for node in AppManager:iterate() do
+nodeManager:connect("installed", function(self)
+    for node in self:iterate() do
         local string = ""
         for property, value in pairs(node.properties) do
             if tostring(value) ~= "" then
@@ -45,3 +42,5 @@ Core.timeout_add(10, function()
     end
     Core.quit()
 end)
+
+nodeManager:activate()
