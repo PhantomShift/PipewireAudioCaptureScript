@@ -41,6 +41,7 @@ Core.timeout_add(10, function()
                 string = string .. property .. " = \"" .. tostring(value) .. "\" "
             end
         end
+        print(string)
     end
     Core.quit()
 end)
