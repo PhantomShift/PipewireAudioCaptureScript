@@ -1,6 +1,9 @@
 local obs = obslua
 local pwi = require "pwinterface"
+local wpi = require "wpinterface"
 local processManager = require "processManager"
+
+wpi.init(script_path())
 
 local _SCRIPT_DEBUG_MODE = false
 if not _SCRIPT_DEBUG_MODE then
@@ -55,17 +58,21 @@ local _CENTRAL_VIRTUAL_MONITOR_STRING = (BASE_MONITOR_STRING):format(
     CENTRAL_VIRTUAL_MONITOR_PRIORITY
 )
 -- pwi.recreateNode(CENTRAL_VIRTUAL_MONITOR, _CENTRAL_VIRTUAL_MONITOR_STRING)
-if not pwi.doesNodeWithNameExist(CENTRAL_VIRTUAL_MONITOR) then
-    pwi.createNode(_CENTRAL_VIRTUAL_MONITOR_STRING)
-end
+-- if not pwi.doesNodeWithNameExist(CENTRAL_VIRTUAL_MONITOR) then
+--     pwi.createNode(_CENTRAL_VIRTUAL_MONITOR_STRING)
+-- end
+wpi.createMonitor(CENTRAL_VIRTUAL_MONITOR, CENTRAL_VIRTUAL_MONITOR_MEDIA_CLASS)
 
+-- local function createSubMonitorNode(nodeName)
+--     return pwi.createAndGetUniqueNode(BASE_MONITOR_STRING:format(
+--         "OBS Source " .. nodeName,
+--         "Audio/Sink/Virtual",
+--         500,
+--         500
+--     ))
+-- end
 local function createSubMonitorNode(nodeName)
-    return pwi.createAndGetUniqueNode(BASE_MONITOR_STRING:format(
-        "OBS Source " .. nodeName,
-        "Audio/Sink/Virtual",
-        500,
-        500
-    ))
+    return wpi.createMonitor("OBS Source " .. nodeName, "Audio/Sink/Virtual")
 end
 
 local VolumeManager = {volumes = {}}
@@ -176,7 +183,8 @@ function pipewireAudioCaptureSource.get_properties(data)
     local properties = obs.obs_properties_create()
     local audioSourceProp = obs.obs_properties_add_list(properties, "Audio Source", "Application Audio to Capture", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
 
-    local audioSources = pwi.listNodesByName()
+    -- local audioSources = pwi.listNodesByName()
+    local audioSources = wpi.listNodes(nil, "Stream/Output/Audio,Audio/Source")
     obs.obs_property_list_insert_string(audioSourceProp, 0, "None", "None")
 
     local index = 1
