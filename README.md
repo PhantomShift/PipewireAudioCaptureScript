@@ -10,7 +10,7 @@ As the name implies, you need to be using PipeWire as your audio backend for thi
 > Note: "OBS Pipewire Audio Capture Monitor" must be added as a global audio device under the audio settings for sound to be properly captured
 
 ## Source Properties
-> Note: Currently, to my knowledge, `obslua.obs_properties_set_flags` does not function properly. Preferrably I would set the `OBS_PROPERTIES_DEFER_UPDATE` flag so that audio is not captured until the user has actually closed the settings window, but that is currently not the case, so keep that in mind when changing these properties.
+> Note: Currently, to my knowledge, `obslua.obs_properties_set_flags` does not function properly. Preferably I would set the `OBS_PROPERTIES_DEFER_UPDATE` flag so that audio is not captured until the user has actually closed the settings window, but that is currently not the case, so keep that in mind when changing these properties.
 ### `Application Audio to Capture`
 Node names to connect. Currently filters out any pipewire nodes that are not of `media.class`
  
