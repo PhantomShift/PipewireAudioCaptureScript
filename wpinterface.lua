@@ -45,7 +45,7 @@ end
 function wpinterface.createMonitor(name, mediaClass)
     assert(name and mediaClass, "Both args required for wpinterface.createMonitor")
     local cmd = ("wpexec %s/createMonitor.lua name=\"%s\" mediaClass=\"%s\""):format(wpScriptDir, name, mediaClass)
-    return getOSExecuteResult(cmd)
+    return getOSExecuteResult(cmd):match("(.-)\n")
 end
 
 function wpinterface.init(dir)
