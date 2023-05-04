@@ -143,11 +143,58 @@ function pipewireAudioCaptureSource.activate(data)
     end
 end
 
+function pipewireAudioCaptureSource.save(data, settings)
+    print "Source property updated"
+    local newAudioSource = obs.obs_data_get_string(settings, "Audio Source")
+    print("Current audio source:")
+    print(data.managed_node)
+    pwi.disconnectAllNamed(data.managed_node, data.capture_node)
+    MANAGED_NODE_NAMES[data.managed_node] = nil
+    if AUTORECONNECT_PROCESSES[data] then
+        processManager:kill(AUTORECONNECT_PROCESSES[data])
+        AUTORECONNECT_PROCESSES[data] = nil
+    end
+
+    print("New audio source:")
+    print(newAudioSource)
+    data.managed_node = newAudioSource
+    if newAudioSource ~= "None" then
+        if not data.capture_node then
+            data.capture_node = createSubMonitorNode(data.source_name)
+            data.capture_name = "OBS Source " .. data.source_name
+            pwi.connectNodes(data.capture_node, CENTRAL_VIRTUAL_MONITOR)
+        end
+        local captureID = data.capture_node
+
+        MANAGED_NODE_NAMES[data.managed_node] = true
+        pwi.connectAllNamed(data.managed_node, captureID)
+    else
+        processManager:kill(AUTORECONNECT_PROCESSES[data])
+    end
+
+    data.auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
+    if data.managed_node ~= "None" then
+        if data.auto_reconnect and data.managed_node then
+            AUTORECONNECT_PROCESSES[data] = startAutoConnecting(data.managed_node, data.capture_name)
+        else
+            processManager:kill(AUTORECONNECT_PROCESSES[data])data.auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
+        if data.managed_node ~= "None" then
+            if data.auto_reconnect and data.managed_node then
+                AUTORECONNECT_PROCESSES[data] = startAutoConnecting(data.managed_node, data.capture_name)
+            else
+                processManager:kill(AUTORECONNECT_PROCESSES[data])
+                AUTORECONNECT_PROCESSES[data] = nil
+            end
+        end
+            AUTORECONNECT_PROCESSES[data] = nil
+        end
+    end
+end
+
 function pipewireAudioCaptureSource.get_properties(data)
     local properties = obs.obs_properties_create()
     local audioSourceProp = obs.obs_properties_add_list(properties, "Audio Source", "Application Audio to Capture", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
 
-    -- local audioSources = pwi.listNodesByName()
     local audioSources = wpi.listNodes(nil, "Stream/Output/Audio,Audio/Source")
     obs.obs_property_list_insert_string(audioSourceProp, 0, "None", "None")
 
@@ -159,41 +206,6 @@ function pipewireAudioCaptureSource.get_properties(data)
         end
     end
 
-    obs.obs_property_set_modified_callback(audioSourceProp, function(props, prop, settings)
-        print "Source property updated"
-        local newAudioSource = obs.obs_data_get_string(settings, "Audio Source")
-        print("Current audio source:")
-        print(data.managed_node)
-        pwi.disconnectAllNamed(data.managed_node, data.capture_node)
-        MANAGED_NODE_NAMES[data.managed_node] = nil
-        if AUTORECONNECT_PROCESSES[data] then
-            processManager:kill(AUTORECONNECT_PROCESSES[data])
-            AUTORECONNECT_PROCESSES[data] = nil
-        end
-
-        print("New audio source:")
-        print(newAudioSource)
-        data.managed_node = newAudioSource
-        if newAudioSource ~= "None" then
-            if not data.capture_node then
-                data.capture_node = createSubMonitorNode(data.source_name)
-                data.capture_name = "OBS Source " .. data.source_name
-                pwi.connectNodes(data.capture_node, CENTRAL_VIRTUAL_MONITOR)
-            end
-            local captureID = data.capture_node
-
-            MANAGED_NODE_NAMES[data.managed_node] = true
-            pwi.connectAllNamed(data.managed_node, captureID)
-
-            if data.auto_reconnect then
-                AUTORECONNECT_PROCESSES[data] = startAutoConnecting(data.managed_node, data.capture_name)
-            end
-        else
-            processManager:kill(AUTORECONNECT_PROCESSES[data])
-            AUTORECONNECT_PROCESSES[data] = nil
-        end
-    end)
-
     local volumeProp = obs.obs_properties_add_int_slider(properties, "volume", "Volume (%)", 0, 100, 1)
     obs.obs_property_set_modified_callback(volumeProp, function(_, _, settings)
         local newVolume = obs.obs_data_get_int(settings, "volume") / 100
@@ -204,18 +216,6 @@ function pipewireAudioCaptureSource.get_properties(data)
     obs.obs_property_set_long_description(autoreconnectProp, [[When a new audio source with the same name is created
 automatically connect the new node to the capture.
 Useful for when re-opening applications or in browsers.]])
-
-    obs.obs_property_set_modified_callback(autoreconnectProp, function(props, prop, settings)
-        data.auto_reconnect = obs.obs_data_get_bool(settings, "autoreconnect")
-        if data.managed_node ~= "None" then
-            if data.auto_reconnect and data.managed_node then
-                AUTORECONNECT_PROCESSES[data] = startAutoConnecting(data.managed_node, data.capture_name)
-            else
-                processManager:kill(AUTORECONNECT_PROCESSES[data])
-                AUTORECONNECT_PROCESSES[data] = nil
-            end
-        end
-    end)
 
     return properties
 end
